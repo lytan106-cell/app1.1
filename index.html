@@ -315,34 +315,7 @@ const auth = firebase.auth();
   const appLoader = document.getElementById('app-loader');
   const emptyState = document.getElementById('empty-state');
   const filterChips = document.querySelectorAll('.filter-chip');
-/* ===== Firebase Auth State ===== */
 
-auth.onAuthStateChanged((user) => {
-
-  if (user) {
-
-    const folderId = USERS[user.email];
-
-    if (folderId) {
-
-      currentUser = user.email;
-      currentFolderId = folderId;
-
-      loginScreen.classList.remove('active');
-      appScreen.classList.add('active');
-
-      loadFiles(false);
-
-    }
-
-  } else {
-
-    loginScreen.classList.add('active');
-    appScreen.classList.remove('active');
-
-  }
-
-});
   function initDB() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, CACHE_VERSION);
