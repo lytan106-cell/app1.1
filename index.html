@@ -267,434 +267,432 @@ const auth = firebase.auth();
 </div>
 
 <script>
-(function() {
-  const API_KEY = 'AIzaSyArqTTfzTDBz7ypBo0_S0xSRXvM0Dwh46k';
-  const ROW_HEIGHT = 72;
-  const CACHE_VERSION = 1;
-  const DB_NAME = 'InvoiceManagerDB';
-  const STORE_NAME = 'invoices';
-  const USERS = {
-    'admin@gmail.com': 'ALL',
-    'hon@gmail.com': '1KeVAXhbl5Cv4f5v0bvFhGHsvrOuDZ7zq',
-    'tham@gmail.com': '15bb8IU1B-tz9xBBYW75L5Gry6QHJamqM',
-    'minhphu@gmail.com': '1g4zNEkSU19Rbi1wVNBfxDYDaNTodzL9w',
-    'toan@gmail.com': '1XH2P7nfrqVBk_4bm7bTBfGVhxCxrBmrr',
-    'trongphu@gmail.com': '1Oc_FYMf5BZo_A0Bimvz_x9TeI9qr-0lR',
-    'duy@gmail.com': '1oP8_o_bmwSuIfY2Ff86HzWhoz5bxMTXO',
-    'nha@gmail.com': '1RRYvZdjOomtqVMOHaU5d4Vd2xw90GpEM',
-    'danh@gmail.com': '1yvr4h6cDFrKowMT7z86GHfGq9ocAYsuB',
-    'phuoc@gmail.com': '1O8hy0t4i06pyrNemk1aj6cMxho8rXRDs',
-    'viet@gmail.com': '1wVv8shYpGHgj6FkfEcPSrPvESk6TsrK2'
-  };
-  
-  let currentUser = null;
-  let currentFolderId = null;
-  let allFiles = [];
-  let filteredFiles = [];
-  let selectedFiles = new Set();
-  let db = null;
-  let currentFilter = 'all';
-  
-  const loginScreen = document.getElementById('login-screen');
-  const appScreen = document.getElementById('app-screen');
-  const emailInput = document.getElementById('email');
-  const passwordInput = document.getElementById('password');
-  const loginBtn = document.getElementById('login-btn');
-  const loginError = document.getElementById('login-error');
-  const logoutBtn = document.getElementById('logout-btn');
-  const refreshBtn = document.getElementById('refresh-btn');
-  const searchInput = document.getElementById('search-input');
-  const listContainer = document.getElementById('list-container');
-  const listPhantom = document.getElementById('list-phantom');
-  const listContent = document.getElementById('list-content');
-  const shareBtn = document.getElementById('share-btn');
-  const previewModal = document.getElementById('preview-modal');
-  const previewClose = document.getElementById('preview-close');
-  const previewTitle = document.getElementById('preview-title');
-  const previewContent = document.getElementById('preview-content');
-  const appLoader = document.getElementById('app-loader');
-  const emptyState = document.getElementById('empty-state');
-  const filterChips = document.querySelectorAll('.filter-chip');
+<script>
+(function(){
 
-  function initDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, CACHE_VERSION);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => { db = request.result; resolve(); };
-      request.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          store.createIndex('folderId', 'folderId', { unique: false });
-          store.createIndex('normalizedName', 'normalizedName', { unique: false });
-          store.createIndex('modifiedTime', 'modifiedTime', { unique: false });
-        }
-      };
-    });
-  }
+/* ================= CONFIG ================= */
 
-  async function getCachedFiles(folderId) {
-    return new Promise((resolve, reject) => {
-      if (!db) return resolve([]);
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.getAll();
-      request.onsuccess = () => {
-        const files = request.result;
-        if (folderId === 'ALL') resolve(files);
-        else resolve(files.filter(f => f.folderId === folderId));
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }
+const CONFIG={
+API_KEY:"AIzaSyArqTTfzTDBz7ypBo0_S0xSRXvM0Dwh46k",
+ROW_HEIGHT:72,
+PAGE_SIZE:1000,
+DB_NAME:"InvoiceManagerDB",
+STORE:"invoices",
+CACHE_VERSION:2
+}
 
-  async function saveFilesToCache(files, folderId) {
-    return new Promise((resolve, reject) => {
-      if (!db) return resolve();
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      const clearReq = store.getAll();
-      clearReq.onsuccess = () => {
-        const existing = clearReq.result;
-        existing.forEach(f => {
-          if (folderId === 'ALL' || f.folderId === folderId) {
-            store.delete(f.id);
-          }
-        });
-        files.forEach(file => {
-          file.folderId = folderId;
-          store.put(file);
-        });
-      };
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  }
+/* ================= USERS ================= */
 
-  function removeAccents(str) {
-    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  }
+const USERS={
+"admin@gmail.com":"ALL",
+"hon@gmail.com":"1KeVAXhbl5Cv4f5v0bvFhGHsvrOuDZ7zq",
+"tham@gmail.com":"15bb8IU1B-tz9xBBYW75L5Gry6QHJamqM",
+"minhphu@gmail.com":"1g4zNEkSU19Rbi1wVNBfxDYDaNTodzL9w",
+"toan@gmail.com":"1XH2P7nfrqVBk_4bm7bTBfGVhxCxrBmrr",
+"trongphu@gmail.com":"1Oc_FYMf5BZo_A0Bimvz_x9TeI9qr-0lR",
+"duy@gmail.com":"1oP8_o_bmwSuIfY2Ff86HzWhoz5bxMTXO",
+"nha@gmail.com":"1RRYvZdjOomtqVMOHaU5d4Vd2xw90GpEM",
+"danh@gmail.com":"1yvr4h6cDFrKowMT7z86GHfGq9ocAYsuB",
+"phuoc@gmail.com":"1O8hy0t4i06pyrNemk1aj6cMxho8rXRDs",
+"viet@gmail.com":"1wVv8shYpGHgj6FkfEcPSrPvESk6TsrK2"
+}
 
-  async function fetchDriveFiles(folderId, pageToken = '') {
-    const query = folderId === 'ALL' 
-      ? "mimeType='application/pdf' and trashed=false" 
-      : "'" + folderId + "' in parents and mimeType='application/pdf' and trashed=false";
-    let url = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(query) + '&fields=nextPageToken,files(id,name,modifiedTime)&pageSize=1000&orderBy=modifiedTime desc&key=' + API_KEY;
-    if (pageToken) {
-      url += '&pageToken=' + pageToken;
-    }
-    
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url);
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText));
-        } else {
-          reject(new Error('Drive API Error: ' + xhr.statusText));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Network Error'));
-      xhr.send();
-    });
-  }
+/* ================= STATE ================= */
 
-  async function loadFiles(forceRefresh = false) {
-    appLoader.classList.add('active');
-    listContent.innerHTML = '';
-    emptyState.classList.remove('active');
-    try {
-      if (!forceRefresh) {
-        const cached = await getCachedFiles(currentFolderId);
-        if (cached && cached.length > 0) {
-          allFiles = cached;
-          applySearchAndFilter();
-          appLoader.classList.remove('active');
-          return;
-        }
-      }
-      let files = [];
-      let pageToken = '';
-      do {
-        const data = await fetchDriveFiles(currentFolderId, pageToken);
-        if (!data.files) break;
-        const processed = data.files.map(f => ({
-          id: f.id,
-          name: f.name,
-          modifiedTime: new Date(f.modifiedTime).getTime(),
-          normalizedName: removeAccents(f.name)
-        }));
-        files = files.concat(processed);
-        pageToken = data.nextPageToken;
-      } while (pageToken);
-      allFiles = files;
-      await saveFilesToCache(allFiles, currentFolderId);
-      applySearchAndFilter();
-    } catch (error) {
-      console.error(error);
-      alert('Không thể tải dữ liệu. Vui lòng kiểm tra kết nối mạng.');
-    } finally {
-      appLoader.classList.remove('active');
-    }
-  }
+let db=null
+let currentUser=null
+let currentFolder=null
 
-  let renderTimeout;
-  let lastStartIndex = -1;
-  let lastEndIndex = -1;
+let allFiles=[]
+let filteredFiles=[]
+let selected=new Set()
 
-  function renderVisibleItems() {
-    const scrollTop = listContainer.scrollTop;
-    const viewportHeight = listContainer.clientHeight;
-    const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 5);
-    const endIndex = Math.min(filteredFiles.length, Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + 5);
-    listPhantom.style.height = (filteredFiles.length * ROW_HEIGHT) + 'px';
-    
-    if (startIndex === lastStartIndex && endIndex === lastEndIndex) return;
-    lastStartIndex = startIndex;
-    lastEndIndex = endIndex;
+let lastStart=-1
+let lastEnd=-1
+let loading=false
 
-    const fragment = document.createDocumentFragment();
-    for (let i = startIndex; i < endIndex; i++) {
-      const file = filteredFiles[i];
-      const item = document.createElement('div');
-      item.className = 'list-item';
-      item.style.top = (i * ROW_HEIGHT) + 'px';
-      const isSelected = selectedFiles.has(file.id);
-      
-      const dateObj = new Date(file.modifiedTime);
-      const dateStr = dateObj.toLocaleDateString('vi-VN') + ' ' + dateObj.toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
-      
-      item.innerHTML = `
-        <input type="checkbox" class="item-checkbox" ${isSelected ? 'checked' : ''} data-id="${file.id}">
-        <div class="item-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-        </div>
-        <div class="item-details" data-id="${file.id}" data-name="${file.name}">
-          <div class="item-name">${file.name}</div>
-          <div class="item-date">Cập nhật: ${dateStr}</div>
-        </div>
-      `;
-      fragment.appendChild(item);
-    }
-    listContent.innerHTML = '';
-    listContent.appendChild(fragment);
-    
-    const checkboxes = listContent.querySelectorAll('.item-checkbox');
-    checkboxes.forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        if (e.target.checked) selectedFiles.add(e.target.dataset.id);
-        else selectedFiles.delete(e.target.dataset.id);
-        updateShareButton();
-      });
-    });
-    
-    const details = listContent.querySelectorAll('.item-details');
-    details.forEach(d => {
-      d.addEventListener('click', () => openPreview(d.dataset.id, d.dataset.name));
-    });
-  }
+/* ================= DOM ================= */
 
-  listContainer.addEventListener('scroll', () => {
-    if (renderTimeout) cancelAnimationFrame(renderTimeout);
-    renderTimeout = requestAnimationFrame(renderVisibleItems);
-  });
+const loginScreen=document.getElementById("login-screen")
+const appScreen=document.getElementById("app-screen")
 
-  function applySearchAndFilter() {
-    const query = removeAccents(searchInput.value.trim());
-    const now = Date.now();
-    let timeLimit = 0;
-    if (currentFilter === 'recent') timeLimit = now - (7 * 24 * 60 * 60 * 1000);
-    else if (currentFilter === 'month') timeLimit = now - (30 * 24 * 60 * 60 * 1000);
-    
-    filteredFiles = allFiles.filter(f => {
-      const matchQuery = !query || f.normalizedName.includes(query);
-      const matchTime = !timeLimit || f.modifiedTime >= timeLimit;
-      return matchQuery && matchTime;
-    });
-    
-    lastStartIndex = -1;
-    lastEndIndex = -1;
-    
-    if (filteredFiles.length === 0) {
-      emptyState.classList.add('active');
-      listPhantom.style.height = '0px';
-      listContent.innerHTML = '';
-    } else {
-      emptyState.classList.remove('active');
-      renderVisibleItems();
-    }
-  }
+const emailInput=document.getElementById("email")
+const passwordInput=document.getElementById("password")
+const loginBtn=document.getElementById("login-btn")
+const loginError=document.getElementById("login-error")
 
-  searchInput.addEventListener('input', () => {
-    applySearchAndFilter();
-  });
+const logoutBtn=document.getElementById("logout-btn")
+const refreshBtn=document.getElementById("refresh-btn")
 
-  filterChips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      filterChips.forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      currentFilter = chip.id.replace('filter-', '');
-      applySearchAndFilter();
-    });
-  });
+const searchInput=document.getElementById("search-input")
 
-  function updateShareButton() {
-    if (selectedFiles.size >= 1 && selectedFiles.size <= 3) {
-      shareBtn.classList.add('visible');
-    } else {
-      shareBtn.classList.remove('visible');
-    }
-  }
+const listContainer=document.getElementById("list-container")
+const listContent=document.getElementById("list-content")
+const listPhantom=document.getElementById("list-phantom")
 
-  shareBtn.addEventListener('click', async () => {
-    if (selectedFiles.size === 0 || selectedFiles.size > 3) return;
-    const filesToShare = Array.from(selectedFiles).map(id => {
-      const f = allFiles.find(file => file.id === id);
-      return { id: f.id, name: f.name };
-    });
-    const text = filesToShare.map(f => `${f.name}: https://drive.google.com/file/d/${f.id}/view`).join('\n');
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Chia sẻ hóa đơn', text: text });
-      } catch (err) {
-        console.log('Share canceled', err);
-      }
-    } else {
-      navigator.clipboard.writeText(text);
-      alert('Đã sao chép liên kết vào khay nhớ tạm!');
-    }
-    selectedFiles.clear();
-    lastStartIndex = -1;
-    renderVisibleItems();
-    updateShareButton();
-  });
+const shareBtn=document.getElementById("share-btn")
 
-  function openPreview(id, name) {
-    previewTitle.textContent = name;
-    previewContent.innerHTML = `<iframe src="https://drive.google.com/file/d/${id}/preview" allow="autoplay"></iframe>`;
-    previewModal.classList.add('active');
-  }
+const previewModal=document.getElementById("preview-modal")
+const previewTitle=document.getElementById("preview-title")
+const previewContent=document.getElementById("preview-content")
+const previewClose=document.getElementById("preview-close")
 
-  previewClose.addEventListener('click', () => {
-    previewModal.classList.remove('active');
-    previewContent.innerHTML = '';
-  });
+const loader=document.getElementById("app-loader")
+const emptyState=document.getElementById("empty-state")
 
+/* ================= UTILS ================= */
 
+function normalize(str){
 
-
-
-
-/* ================= LOGIN ================= */
-
-loginBtn.addEventListener('click', async () => {
-
-  const email = emailInput.value.trim().toLowerCase();
-  const password = passwordInput.value;
-
-  if (!email || !password) {
-    loginError.textContent = 'Vui lòng nhập email và mật khẩu';
-    loginError.style.display = 'block';
-    return;
-  }
-
-  try {
-
-    await auth.signInWithEmailAndPassword(email, password);
-    loginError.style.display = 'none';
-
-  } catch (error) {
-
-    loginError.textContent = 'Sai email hoặc mật khẩu';
-    loginError.style.display = 'block';
-
-  }
-
-});
-
-
-/* ================= AUTH STATE ================= */
-
-auth.onAuthStateChanged((user) => {
-
-  if (!user) {
-
-    loginScreen.classList.add('active');
-    appScreen.classList.remove('active');
-
-    return;
-  }
-
-  const email = user.email.toLowerCase();
-  const folderId = USERS[email];
-
-  if (!folderId) {
-
-    loginError.textContent = 'Tài khoản không có quyền truy cập';
-    loginError.style.display = 'block';
-    auth.signOut();
-    return;
-
-  }
-
-  currentUser = email;
-  currentFolderId = folderId;
-
-  loginScreen.classList.remove('active');
-  appScreen.classList.add('active');
-
-  loadFiles(false);
-
-});
-
-
-/* ================= LOGOUT ================= */
-
-logoutBtn.addEventListener('click', async () => {
-
-  await auth.signOut();
-
-  currentUser = null;
-  currentFolderId = null;
-
-  allFiles = [];
-  filteredFiles = [];
-  selectedFiles.clear();
-
-  listContent.innerHTML = '';
-  searchInput.value = '';
-
-});
-
-
-/* ================= REFRESH ================= */
-
-refreshBtn.addEventListener('click', () => {
-
-  loadFiles(true);
-
-});
-
-
-/* ================= INIT ================= */
-
-async function init() {
-
-  await initDB();
+return str
+.normalize("NFD")
+.replace(/[\u0300-\u036f]/g,"")
+.toLowerCase()
 
 }
 
+/* ================= INDEXED DB ================= */
 
-  
+function initDB(){
 
+return new Promise((res,rej)=>{
 
+const req=indexedDB.open(CONFIG.DB_NAME,CONFIG.CACHE_VERSION)
 
-  
+req.onupgradeneeded=e=>{
 
+const db=e.target.result
 
+if(!db.objectStoreNames.contains(CONFIG.STORE)){
 
-  init();
+const store=db.createObjectStore(CONFIG.STORE,{keyPath:"id"})
+store.createIndex("folder","folder")
+
+}
+
+}
+
+req.onsuccess=e=>{
+db=e.target.result
+res()
+}
+
+req.onerror=rej
+
+})
+
+}
+
+/* ================= DRIVE ================= */
+
+async function fetchDrive(folder,pageToken=""){
+
+let query=folder==="ALL"
+? "mimeType='application/pdf' and trashed=false"
+: `'${folder}' in parents and mimeType='application/pdf' and trashed=false`
+
+let url=`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=nextPageToken,files(id,name,modifiedTime)&pageSize=${CONFIG.PAGE_SIZE}&orderBy=modifiedTime desc&key=${CONFIG.API_KEY}`
+
+if(pageToken) url+="&pageToken="+pageToken
+
+const res=await fetch(url)
+
+if(!res.ok) throw new Error("Drive API error")
+
+return res.json()
+
+}
+
+/* ================= LOAD FILE ================= */
+
+async function loadFiles(force=false){
+
+if(loading) return
+loading=true
+
+loader.classList.add("active")
+
+try{
+
+let files=[]
+let token=""
+
+do{
+
+const data=await fetchDrive(currentFolder,token)
+
+if(!data.files) break
+
+files=files.concat(
+
+data.files.map(f=>({
+
+id:f.id,
+name:f.name,
+normalized:normalize(f.name),
+modified:new Date(f.modifiedTime).getTime()
+
+}))
+
+)
+
+token=data.nextPageToken
+
+}while(token)
+
+allFiles=files
+
+applyFilter()
+
+}catch(e){
+
+console.error(e)
+alert("Không thể tải dữ liệu")
+
+}
+
+loader.classList.remove("active")
+loading=false
+
+}
+
+/* ================= FILTER ================= */
+
+function applyFilter(){
+
+const q=normalize(searchInput.value.trim())
+
+filteredFiles=allFiles.filter(f=>!q||f.normalized.includes(q))
+
+if(filteredFiles.length===0){
+
+emptyState.classList.add("active")
+listContent.innerHTML=""
+listPhantom.style.height="0px"
+
+}else{
+
+emptyState.classList.remove("active")
+render()
+
+}
+
+}
+
+/* ================= VIRTUAL LIST ================= */
+
+function render(){
+
+listPhantom.style.height=(filteredFiles.length*CONFIG.ROW_HEIGHT)+"px"
+
+draw()
+
+}
+
+function draw(){
+
+const scroll=listContainer.scrollTop
+const height=listContainer.clientHeight
+
+let start=Math.floor(scroll/CONFIG.ROW_HEIGHT)-5
+let end=Math.ceil((scroll+height)/CONFIG.ROW_HEIGHT)+5
+
+start=Math.max(0,start)
+end=Math.min(filteredFiles.length,end)
+
+if(start===lastStart && end===lastEnd) return
+
+lastStart=start
+lastEnd=end
+
+let html=""
+
+for(let i=start;i<end;i++){
+
+const f=filteredFiles[i]
+const checked=selected.has(f.id)?"checked":""
+
+html+=`
+<div class="list-item" style="top:${i*CONFIG.ROW_HEIGHT}px">
+
+<input type="checkbox" class="item-checkbox" data-id="${f.id}" ${checked}>
+
+<div class="item-details" data-id="${f.id}" data-name="${f.name}">
+<div class="item-name">${f.name}</div>
+</div>
+
+</div>
+`
+
+}
+
+listContent.innerHTML=html
+
+}
+
+/* ================= EVENT DELEGATION ================= */
+
+listContent.addEventListener("click",e=>{
+
+const detail=e.target.closest(".item-details")
+
+if(detail){
+
+openPreview(detail.dataset.id,detail.dataset.name)
+
+}
+
+})
+
+listContent.addEventListener("change",e=>{
+
+if(e.target.classList.contains("item-checkbox")){
+
+const id=e.target.dataset.id
+
+if(e.target.checked) selected.add(id)
+else selected.delete(id)
+
+updateShare()
+
+}
+
+})
+
+/* ================= SHARE ================= */
+
+function updateShare(){
+
+if(selected.size>0 && selected.size<=3)
+shareBtn.classList.add("visible")
+else
+shareBtn.classList.remove("visible")
+
+}
+
+shareBtn.onclick=()=>{
+
+const links=[...selected].map(id=>{
+
+const f=allFiles.find(x=>x.id===id)
+return `${f.name}\nhttps://drive.google.com/file/d/${f.id}/view`
+
+}).join("\n\n")
+
+navigator.clipboard.writeText(links)
+
+alert("Đã copy link")
+
+selected.clear()
+
+render()
+updateShare()
+
+}
+
+/* ================= PREVIEW ================= */
+
+function openPreview(id,name){
+
+previewTitle.textContent=name
+
+previewContent.innerHTML=
+`<iframe src="https://drive.google.com/file/d/${id}/preview"></iframe>`
+
+previewModal.classList.add("active")
+
+}
+
+previewClose.onclick=()=>{
+
+previewModal.classList.remove("active")
+previewContent.innerHTML=""
+
+}
+
+/* ================= LOGIN ================= */
+
+loginBtn.onclick=async()=>{
+
+const email=emailInput.value.trim().toLowerCase()
+const pass=passwordInput.value
+
+if(!email||!pass){
+
+loginError.textContent="Nhập email và mật khẩu"
+loginError.style.display="block"
+return
+
+}
+
+try{
+
+await auth.signInWithEmailAndPassword(email,pass)
+loginError.style.display="none"
+
+}catch(e){
+
+loginError.textContent="Sai tài khoản"
+loginError.style.display="block"
+
+}
+
+}
+
+/* ================= AUTH ================= */
+
+auth.onAuthStateChanged(async user=>{
+
+if(!user){
+
+loginScreen.classList.add("active")
+appScreen.classList.remove("active")
+return
+
+}
+
+const email=user.email.toLowerCase()
+
+const folder=USERS[email]
+
+if(!folder){
+
+auth.signOut()
+alert("Không có quyền")
+return
+
+}
+
+currentUser=email
+currentFolder=folder
+
+loginScreen.classList.remove("active")
+appScreen.classList.add("active")
+
+await loadFiles()
+
+})
+
+/* ================= EVENTS ================= */
+
+searchInput.addEventListener("input",applyFilter)
+
+logoutBtn.onclick=()=>auth.signOut()
+
+refreshBtn.onclick=()=>loadFiles(true)
+
+listContainer.addEventListener("scroll",()=>{
+
+requestAnimationFrame(draw)
+
+})
+
+/* ================= INIT ================= */
+
+initDB()
+
+})()
+</script>
 })();
 </script>
 </body>
