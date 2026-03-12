@@ -612,7 +612,8 @@ auth.onAuthStateChanged((user) => {
 
 
 
-  
+
+/* ================= LOGIN ================= */
 
 loginBtn.addEventListener('click', async () => {
 
@@ -627,25 +628,8 @@ loginBtn.addEventListener('click', async () => {
 
   try {
 
-    const userCredential = await auth.signInWithEmailAndPassword(email, password);
-    const user = userCredential.user;
-
-    const folderId = USERS[user.email];
-
-    if (!folderId) {
-      loginError.textContent = 'Tài khoản không có quyền truy cập';
-      loginError.style.display = 'block';
-      await auth.signOut();
-      return;
-    }
-
-    currentUser = user.email;
-    currentFolderId = folderId;
-
-    loginScreen.classList.remove('active');
-    appScreen.classList.add('active');
-
-    loadFiles(false);
+    await auth.signInWithEmailAndPassword(email, password);
+    loginError.style.display = 'none';
 
   } catch (error) {
 
@@ -657,47 +641,44 @@ loginBtn.addEventListener('click', async () => {
 });
 
 
+/* ================= AUTH STATE ================= */
+
+auth.onAuthStateChanged((user) => {
+
+  if (!user) {
+
+    loginScreen.classList.add('active');
+    appScreen.classList.remove('active');
+
+    return;
+  }
+
+  const email = user.email.toLowerCase();
+  const folderId = USERS[email];
+
+  if (!folderId) {
+
+    loginError.textContent = 'Tài khoản không có quyền truy cập';
+    loginError.style.display = 'block';
+    auth.signOut();
+    return;
+
+  }
+
+  currentUser = email;
+  currentFolderId = folderId;
+
+  loginScreen.classList.remove('active');
+  appScreen.classList.add('active');
+
+  loadFiles(false);
+
+});
 
 
+/* ================= LOGOUT ================= */
 
-
-
-    
-    const email = emailInput.value.trim().toLowerCase();
-    const password = passwordInput.value;
-    
-    if (!email || !password) {
-      loginError.textContent = 'Vui lòng nhập email và mật khẩu';
-      loginError.style.display = 'block';
-      return;
-    }
-    if (password !== '12345') {
-      loginError.textContent = 'Mật khẩu không chính xác';
-      loginError.style.display = 'block';
-      return;
-    }
-    const folderId = USERS[email];
-    if (!folderId) {
-      loginError.textContent = 'Tài khoản không có quyền truy cập';
-      loginError.style.display = 'block';
-      return;
-    }
-    
-    currentUser = email;
-    currentFolderId = folderId;
-    localStorage.setItem('invoice_user', email);
-    loginError.style.display = 'none';
-    loginScreen.classList.remove('active');
-    appScreen.classList.add('active');
-    loadFiles(false);
-  });
-
-
-
-
-
-  
- logoutBtn.addEventListener('click', async () => {
+logoutBtn.addEventListener('click', async () => {
 
   await auth.signOut();
 
@@ -711,37 +692,35 @@ loginBtn.addEventListener('click', async () => {
   listContent.innerHTML = '';
   searchInput.value = '';
 
-  appScreen.classList.remove('active');
-  loginScreen.classList.add('active');
+});
 
-  emailInput.value = '';
-  passwordInput.value = '';
+
+/* ================= REFRESH ================= */
+
+refreshBtn.addEventListener('click', () => {
+
+  loadFiles(true);
 
 });
 
 
+/* ================= INIT ================= */
 
+async function init() {
 
+  await initDB();
 
+}
+
+init();
+
+  
 
 
 
   
-  refreshBtn.addEventListener('click', () => {
-    loadFiles(true);
-  });
 
-  async function init() {
-    await initDB();
-    const savedUser = localStorage.getItem('invoice_user');
-    if (savedUser && USERS[savedUser]) {
-      currentUser = savedUser;
-      currentFolderId = USERS[savedUser];
-      loginScreen.classList.remove('active');
-      appScreen.classList.add('active');
-      loadFiles(false);
-    }
-  }
+
 
   init();
 })();
