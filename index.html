@@ -186,6 +186,7 @@ body { background-color: var(--background); color: var(--text); overflow: hidden
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const db = firebase.firestore();
 </script>
 
 
@@ -283,19 +284,7 @@ CACHE_VERSION:2
 
 /* ================= USERS ================= */
 
-const USERS={
-"admin@gmail.com":"ALL",
-"hon@gmail.com":"1KeVAXhbl5Cv4f5v0bvFhGHsvrOuDZ7zq",
-"tham@gmail.com":"15bb8IU1B-tz9xBBYW75L5Gry6QHJamqM",
-"minhphu@gmail.com":"1g4zNEkSU19Rbi1wVNBfxDYDaNTodzL9w",
-"toan@gmail.com":"1XH2P7nfrqVBk_4bm7bTBfGVhxCxrBmrr",
-"trongphu@gmail.com":"1Oc_FYMf5BZo_A0Bimvz_x9TeI9qr-0lR",
-"duy@gmail.com":"1oP8_o_bmwSuIfY2Ff86HzWhoz5bxMTXO",
-"nha@gmail.com":"1RRYvZdjOomtqVMOHaU5d4Vd2xw90GpEM",
-"danh@gmail.com":"1yvr4h6cDFrKowMT7z86GHfGq9ocAYsuB",
-"phuoc@gmail.com":"1O8hy0t4i06pyrNemk1aj6cMxho8rXRDs",
-"viet@gmail.com":"1wVv8shYpGHgj6FkfEcPSrPvESk6TsrK2"
-}
+
 
 /* ================= STATE ================= */
 
@@ -653,15 +642,38 @@ return
 
 const email=user.email.toLowerCase()
 
-const folder=USERS[email]
+try{
 
-if(!folder){
+const doc=await db.collection("users").doc(email).get()
 
+if(!doc.exists){
+
+alert("Không có quyền truy cập")
 auth.signOut()
-alert("Không có quyền")
 return
 
 }
+
+const data=doc.data()
+
+currentUser=email
+currentFolder=data.folder
+
+loginScreen.classList.remove("active")
+appScreen.classList.add("active")
+
+await loadFiles()
+
+}catch(e){
+
+console.error(e)
+alert("Lỗi hệ thống")
+
+}
+
+})
+
+
 
 currentUser=email
 currentFolder=folder
