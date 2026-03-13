@@ -1,349 +1,388 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- CRITICAL FIX: Run before <head> to intercept environment/Vite scripts that crash when overwriting fetch -->
-<script>
-try {
-  let _f = window.fetch;
-  Object.defineProperty(window, 'fetch', {
-    get: () => _f,
-    set: (v) => { _f = v; },
-    configurable: true,
-    enumerable: true
-  });
-} catch(e) {}
-window.addEventListener('error', e => {
-  if (e.message && e.message.includes('fetch')) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-}, true);
-</script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Invoice Manager</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
 <style>
-/* Hide Vite error overlay if environment scripts still fail */
-vite-error-overlay, #vite-error-overlay { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; user-select: none; }
-body { background: #f4f6f8; color: #111827; overflow: hidden; }
-input, button { font-family: inherit; outline: none; border: none; }
-#login-view { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 20px; background: #fff; }
-#login-view h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-#login-view p { font-size: 14px; color: #6b7280; margin-bottom: 32px; }
-.input-group { width: 100%; max-width: 320px; margin-bottom: 16px; }
-.input-group input { width: 100%; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; background: #f9fafb; user-select: auto; }
-#login-btn { width: 100%; max-width: 320px; padding: 14px; background: #2563eb; color: #fff; font-size: 16px; font-weight: 600; border-radius: 8px; margin-top: 8px; cursor: pointer; }
-#login-btn:active { background: #1d4ed8; }
-footer { position: absolute; bottom: 20px; font-size: 12px; color: #9ca3af; }
-#app-view { display: none; flex-direction: column; height: 100vh; }
-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; }
-header button { background: transparent; color: #2563eb; font-size: 14px; font-weight: 600; cursor: pointer; }
-#search { flex: 1; margin: 0 16px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 20px; font-size: 14px; background: #f3f4f6; user-select: auto; }
-#filters { display: flex; overflow-x: auto; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; gap: 8px; scrollbar-width: none; }
-#filters::-webkit-scrollbar { display: none; }
-.filter-btn { padding: 6px 16px; background: #f3f4f6; color: #374151; border-radius: 16px; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; }
-.filter-btn.active { background: #2563eb; color: #fff; }
-#viewport { flex: 1; overflow-y: auto; position: relative; background: #f4f6f8; -webkit-overflow-scrolling: touch; }
-#scroll-content { position: absolute; top: 0; left: 0; width: 100%; }
-.row { position: absolute; top: 0; left: 0; width: 100%; height: 60px; display: flex; align-items: center; padding: 0 16px; background: #fff; border-bottom: 1px solid #f3f4f6; }
-.row input[type="checkbox"] { width: 20px; height: 20px; margin-right: 16px; accent-color: #2563eb; }
-.row .info { flex: 1; overflow: hidden; cursor: pointer; }
-.row .name { font-size: 14px; font-weight: 500; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row .date { font-size: 12px; color: #6b7280; margin-top: 2px; }
-#share-btn { display: none; position: fixed; bottom: 24px; right: 24px; background: #2563eb; color: #fff; padding: 14px 24px; border-radius: 24px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); cursor: pointer; z-index: 10; }
-#pdf-view { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 20; flex-direction: column; }
-#pdf-header { display: flex; justify-content: flex-end; padding: 16px; background: rgba(0,0,0,0.8); }
-#pdf-header button { background: #fff; color: #000; padding: 8px 16px; border-radius: 16px; font-weight: 600; cursor: pointer; }
-#pdf-frame { flex: 1; width: 100%; border: none; background: #fff; }
+.hide-scroll::-webkit-scrollbar { display: none; }
+.hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+#pdfContainer { touch-action: pan-x pan-y; }
 </style>
 </head>
-<body>
-<div id="login-view">
-<h1>Invoice Manager</h1>
-<p>Sign in to access your documents</p>
-<div class="input-group">
-<input type="text" id="username" placeholder="Username" oninput="this.value=this.value.toLowerCase()">
+<body class="bg-gray-100 text-gray-900 font-sans h-screen overflow-hidden flex flex-col selection:bg-blue-200">
+<div id="loginScreen" class="flex flex-col h-screen justify-center items-center p-6 bg-white z-20 absolute inset-0">
+<h1 class="text-3xl font-bold mb-2">Invoice Manager</h1>
+<p class="text-gray-500 mb-8">Sign in to access your documents</p>
+<input type="text" id="usernameInput" placeholder="Username" class="w-full max-w-sm border border-gray-300 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+<button id="loginBtn" class="w-full max-w-sm bg-blue-600 text-white rounded-lg px-4 py-3 font-semibold active:bg-blue-700 transition">Login</button>
+<p id="loginError" class="text-red-500 mt-4 hidden">User not found</p>
+<div class="mt-auto pb-4 text-gray-400 text-sm">&copy; Sharker Teddy</div>
 </div>
-<div class="input-group">
-<input type="password" id="password" placeholder="Password">
+<div id="mainScreen" class="hidden flex flex-col h-screen bg-gray-50 z-10 absolute inset-0">
+<div class="bg-white shadow-sm z-10">
+<div class="flex justify-between items-center p-4 border-b border-gray-200">
+<h1 class="text-xl font-bold">Invoices</h1>
+<div>
+<button id="refreshBtn" class="text-blue-600 font-medium mr-4 active:text-blue-800">Refresh</button>
+<button id="logoutBtn" class="text-gray-600 font-medium active:text-gray-800">Logout</button>
 </div>
-<button id="login-btn">Login</button>
-<footer>&copy; Sharker Teddy</footer>
 </div>
-<div id="app-view">
-<header>
-<button id="back-btn">Back</button>
-<input type="text" id="search" placeholder="Search invoices...">
-<button id="refresh-btn">Refresh</button>
-</header>
-<div id="filters">
-<button class="filter-btn active" data-filter="all">All</button>
-<button class="filter-btn" data-filter="today">Today</button>
-<button class="filter-btn" data-filter="yesterday">Yesterday</button>
-<button class="filter-btn" data-filter="week">Week</button>
-<button class="filter-btn" data-filter="month">Month</button>
+<div class="p-4">
+<input type="text" id="searchInput" placeholder="Search files..." class="w-full border border-gray-300 rounded-lg px-4 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+<div class="flex space-x-2 overflow-x-auto pb-1 hide-scroll" id="filterContainer"></div>
 </div>
-<div id="viewport">
-<div id="scroll-content"></div>
 </div>
-<button id="share-btn">Share</button>
+<div id="scrollContainer" class="flex-1 overflow-y-auto relative">
+<div id="scrollContent" class="w-full relative"></div>
 </div>
-<div id="pdf-view">
-<div id="pdf-header">
-<button id="close-pdf">Close X</button>
+<button id="shareBtn" class="hidden absolute bottom-6 right-6 bg-blue-600 text-white rounded-full p-4 shadow-lg active:bg-blue-700 transition z-50 flex items-center justify-center">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+</button>
 </div>
-<iframe id="pdf-frame"></iframe>
+<div id="pdfModal" class="hidden fixed inset-0 bg-black bg-opacity-95 z-50 flex flex-col">
+<div class="flex justify-between items-center p-4 text-white border-b border-gray-800">
+<div class="space-x-4">
+<button id="zoomOut" class="p-2 bg-gray-800 rounded active:bg-gray-700 w-10 h-10 font-bold text-xl">-</button>
+<button id="zoomIn" class="p-2 bg-gray-800 rounded active:bg-gray-700 w-10 h-10 font-bold text-xl">+</button>
 </div>
-<script>
-const ROW_HEIGHT = 60;
-let visibleData = [];
-let selected = new Set();
-let currentFilter = 'all';
-let currentQuery = '';
-const viewport = document.getElementById('viewport');
-const scrollContent = document.getElementById('scroll-content');
-const shareBtn = document.getElementById('share-btn');
+<button id="closePdfBtn" class="p-2 bg-gray-800 rounded active:bg-gray-700 w-10 h-10 font-bold">X</button>
+</div>
+<div class="flex-1 overflow-auto flex justify-center items-start p-4" id="pdfContainer">
+<canvas id="pdfCanvas"></canvas>
+</div>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-const workerCode = `
-let items = [];
-let lowerNames = [];
-let timestamps = [];
-onmessage = function(e) {
-  if (e.data.type === 'init') {
-    items = e.data.items;
-    const len = items.length;
-    lowerNames = new Array(len);
-    timestamps = new Float64Array(len);
-    for (let i = 0; i < len; i++) {
-      lowerNames[i] = items[i].name.toLowerCase();
-      const d = new Date(items[i].modifiedTime);
-      d.setHours(0,0,0,0);
-      timestamps[i] = d.getTime();
-    }
-  } else if (e.data.type === 'search') {
-    const q = e.data.query;
-    const f = e.data.filter;
-    const now = new Date();
-    now.setHours(0,0,0,0);
-    const nowTime = now.getTime();
-    
-    let res = [];
-    for (let i = 0; i < items.length; i++) {
-      if (f !== 'all') {
-        const diff = nowTime - timestamps[i];
-        const days = Math.floor(diff / 86400000);
-        if (f === 'today' && days !== 0) continue;
-        if (f === 'yesterday' && days !== 1) continue;
-        if (f === 'week' && days > 7) continue;
-        if (f === 'month' && days > 30) continue;
-      }
-      if (q && lowerNames[i].indexOf(q) === -1) continue;
-      res.push(items[i]);
-    }
-    postMessage({ type: 'result', data: res });
-  }
-}
-`;
-const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
-const worker = new Worker(URL.createObjectURL(workerBlob));
-
-worker.onmessage = (e) => {
-  if (e.data.type === 'result') {
-    visibleData = e.data.data;
-    viewport.scrollTop = 0;
-    renderVisible();
-  }
+const firebaseConfig = {
+apiKey: "AIzaSyBcZ3XxkLuGnFf7BVI7gL7IlllAuifStFM",
+authDomain: "app10-489810.firebaseapp.com",
+projectId: "app10-489810",
+storageBucket: "app10-489810.firebasestorage.app",
+messagingSenderId: "318163955130",
+appId: "1:318163955130:web:68a9785bc4fd435b260183"
 };
 
-function triggerSearch() {
-  worker.postMessage({ type: 'search', query: currentQuery, filter: currentFilter });
-}
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-function renderVisible() {
-  const scrollTop = viewport.scrollTop;
-  const viewportHeight = viewport.clientHeight || window.innerHeight;
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 5);
-  const endIndex = Math.min(visibleData.length, Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + 5);
-  
-  scrollContent.style.height = `${visibleData.length * ROW_HEIGHT}px`;
-  scrollContent.innerHTML = '';
-  
-  const fragment = document.createDocumentFragment();
-  for (let i = startIndex; i < endIndex; i++) {
-    const item = visibleData[i];
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.style.transform = `translateY(${i * ROW_HEIGHT}px)`;
-    row.innerHTML = `
-      <input type="checkbox" class="select-cb" data-id="${item.id}" ${selected.has(item.id) ? 'checked' : ''}>
-      <div class="info" data-id="${item.id}">
-        <div class="name">${item.name}</div>
-        <div class="date">${item.modifiedTime}</div>
-      </div>
-    `;
-    fragment.appendChild(row);
-  }
-  scrollContent.appendChild(fragment);
-}
+let allFiles = [];
+let filteredFiles = [];
+let selectedFiles = new Set();
+let currentFilter = 'All';
+let session = JSON.parse(localStorage.getItem('invoice_session') || 'null');
 
-let renderTicking = false;
-viewport.addEventListener('scroll', () => {
-  if (!renderTicking) {
-    window.requestAnimationFrame(() => {
-      renderVisible();
-      renderTicking = false;
-    });
-    renderTicking = true;
-  }
-}, { passive: true });
+const loginScreen = document.getElementById('loginScreen');
+const mainScreen = document.getElementById('mainScreen');
+const usernameInput = document.getElementById('usernameInput');
+const loginBtn = document.getElementById('loginBtn');
+const loginError = document.getElementById('loginError');
+const refreshBtn = document.getElementById('refreshBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const searchInput = document.getElementById('searchInput');
+const filterContainer = document.getElementById('filterContainer');
+const scrollContainer = document.getElementById('scrollContainer');
+const scrollContent = document.getElementById('scrollContent');
+const shareBtn = document.getElementById('shareBtn');
+const pdfModal = document.getElementById('pdfModal');
+const pdfCanvas = document.getElementById('pdfCanvas');
+const closePdfBtn = document.getElementById('closePdfBtn');
+const zoomIn = document.getElementById('zoomIn');
+const zoomOut = document.getElementById('zoomOut');
 
-document.getElementById('scroll-content').addEventListener('change', e => {
-  if (e.target.classList.contains('select-cb')) {
-    const id = e.target.dataset.id;
-    if (e.target.checked) selected.add(id);
-    else selected.delete(id);
-    updateShareButton();
-  }
+if (session) initMain();
+
+usernameInput.addEventListener('input', (e) => {
+e.target.value = e.target.value.toLowerCase().replace(/\s/g, '');
 });
 
-document.getElementById('scroll-content').addEventListener('click', e => {
-  const info = e.target.closest('.info');
-  if (info) {
-    const id = info.dataset.id;
-    document.getElementById('pdf-frame').src = 'data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nDPQM1Qo5ypUMFAwALJMLU31jBQsTAyNTAz1DBSKUrnCtRTy01PzSjLz0hXyS1JzUoGkQn5eag5QvFwhPzMvGwB5qA6wCmVuZHN0cmVhbQplbmRvYmoKMyAwIG9iago0OQplbmRvYmoKMSAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDU5NSA4NDJdL1Jlc291cmNlczw8L0ZvbnQ8PC9GMSA0IDAgUj4+Pj4vQ29udGVudHMgMiAwIFIvUGFyZW50IDUgMCBSPj4KZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvSGVsdmV0aWNhPj4KZW5kb2JqCjUgMCBvYmoKPDwvVHlwZS9QYWdlcy9LaWRzWzEgMCBSXS9Db3VudCAxPj4KZW5kb2JqCjYgMCBvYmoKPDwvVHlwZS9DYXRhbG9nL1BhZ2VzIDUgMCBSPj4KZW5kb2JqCjcgMCBvYmoKPDwvUHJvZHVjZXIoR2hvc3RzY3JpcHQgOS41MCkvQ3JlYXRpb25EYXRlKEQ6MjAyNTAxMjAwMDAwMDBaKT4+CmVuZG9iagp4cmVmCjAgOAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAxMjUgMDAwMDAgbiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMTA2IDAwMDAwIG4gCjAwMDAwMDAyMjIgMDAwMDAgbiAKMDAwMDAwMDIxMSAwMDAwMCBuIAowMDAwMDAwMzYwIDAwMDAwIG4gCjAwMDAwMDA0MDkgMDAwMDAgbiAKdHJhaWxlcgo8PC9TaXplIDgvUm9vdCA2IDAgUi9JbmZvIDcgMCBSPj4Kc3RhcnR4cmVmCjUwOQolJUVPRgo=';
-    document.getElementById('pdf-view').style.display = 'flex';
-  }
+loginBtn.addEventListener('click', async () => {
+const username = usernameInput.value;
+if (!username) return;
+
+loginBtn.textContent = 'Loading...';
+loginBtn.disabled = true;
+loginError.classList.add('hidden');
+
+try {
+await signInAnonymously(auth);
+const q = query(collection(db, "users"), where("username", "==", username));
+const snapshot = await getDocs(q);
+
+if (!snapshot.empty) {
+const userData = snapshot.docs[0].data();
+session = { username, folderId: userData.folderId };
+localStorage.setItem('invoice_session', JSON.stringify(session));
+initMain();
+} else {
+loginError.classList.remove('hidden');
+}
+} catch (err) {
+loginError.textContent = 'Error connecting to database';
+loginError.classList.remove('hidden');
+} finally {
+loginBtn.textContent = 'Login';
+loginBtn.disabled = false;
+}
 });
 
-document.getElementById('close-pdf').onclick = () => {
-  document.getElementById('pdf-view').style.display = 'none';
-  document.getElementById('pdf-frame').src = '';
-};
+logoutBtn.addEventListener('click', () => {
+localStorage.removeItem('invoice_session');
+session = null;
+allFiles = [];
+filteredFiles = [];
+selectedFiles.clear();
+mainScreen.classList.add('hidden');
+loginScreen.classList.remove('hidden');
+usernameInput.value = '';
+});
 
-function updateShareButton() {
-  if (selected.size > 0 && selected.size <= 3) {
-    shareBtn.style.display = 'block';
-  } else {
-    shareBtn.style.display = 'none';
-  }
+async function initMain() {
+loginScreen.classList.add('hidden');
+mainScreen.classList.remove('hidden');
+setupFilters();
+
+const cached = await loadCache();
+if (cached && cached.length > 0) {
+allFiles = cached;
+applyFilters();
+} else {
+await fetchDriveFiles();
+}
 }
 
-shareBtn.onclick = async () => {
-  if (selected.size === 0 || selected.size > 3) return;
-  const files = [];
-  for (const id of selected) {
-    const blob = new Blob(['%PDF-1.4 mock'], { type: 'application/pdf' });
-    files.push(new File([blob], `${id}.pdf`, { type: 'application/pdf' }));
-  }
-  if (navigator.canShare && navigator.canShare({ files })) {
-    try {
-      await navigator.share({ files, title: 'Invoices' });
-    } catch (e) {}
-  }
-};
+refreshBtn.addEventListener('click', fetchDriveFiles);
 
-document.getElementById('login-btn').onclick = () => {
-  const u = document.getElementById('username').value;
-  const p = document.getElementById('password').value;
-  if (!u || !p) return;
-  
-  // Use XMLHttpRequest to completely avoid any fetch polyfill conflicts in the environment
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', `https://firestore.googleapis.com/v1/projects/app10-489810/databases/(default)/documents/users/${u}?key=AIzaSyBcZ3XxkLuGnFf7BVI7gL7IlllAuifStFM`);
-  xhr.onload = () => {
-    let folderId = "mock_folder_id";
-    if (xhr.status === 200) {
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (data.fields && data.fields.password && data.fields.password.stringValue === p) {
-          if (data.fields.folderId) folderId = data.fields.folderId.stringValue;
-        }
-      } catch (e) {}
-    }
-    document.getElementById('login-view').style.display = 'none';
-    document.getElementById('app-view').style.display = 'flex';
-    loadData(folderId);
-  };
-  xhr.onerror = () => {
-    document.getElementById('login-view').style.display = 'none';
-    document.getElementById('app-view').style.display = 'flex';
-    loadData("mock_folder_id");
-  };
-  xhr.send();
-};
+async function fetchDriveFiles() {
+if (!session || !session.folderId) return;
+refreshBtn.textContent = '...';
+try {
+const q = `'${session.folderId}' in parents and mimeType='application/pdf' and trashed=false`;
+const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)&key=${firebaseConfig.apiKey}`;
 
-document.getElementById('back-btn').onclick = () => {
-  document.getElementById('app-view').style.display = 'none';
-  document.getElementById('login-view').style.display = 'flex';
-  document.getElementById('password').value = '';
-  selected.clear();
-  updateShareButton();
-};
+const res = await fetch(url);
+const data = await res.json();
 
-document.getElementById('refresh-btn').onclick = () => {
-  loadData("mock_folder_id", true);
-};
+if (data.files) {
+allFiles = data.files;
+await saveCache(allFiles);
+applyFilters();
+}
+} catch (err) {
+alert('Failed to fetch files');
+} finally {
+refreshBtn.textContent = 'Refresh';
+}
+}
 
-let searchTimeout;
-document.getElementById('search').addEventListener('input', e => {
-  clearTimeout(searchTimeout);
-  currentQuery = e.target.value.toLowerCase();
-  searchTimeout = setTimeout(triggerSearch, 150);
+const DB_NAME = 'InvoiceManagerDB';
+const STORE_NAME = 'files';
+
+function getDB() {
+return new Promise((resolve, reject) => {
+const request = indexedDB.open(DB_NAME, 1);
+request.onupgradeneeded = (e) => {
+const db = e.target.result;
+if (!db.objectStoreNames.contains(STORE_NAME)) {
+db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+}
+};
+request.onsuccess = () => resolve(request.result);
+request.onerror = () => reject(request.error);
 });
+}
+
+async function saveCache(files) {
+const db = await getDB();
+const tx = db.transaction(STORE_NAME, 'readwrite');
+const store = tx.objectStore(STORE_NAME);
+store.clear();
+files.forEach(file => store.put(file));
+return new Promise(resolve => tx.oncomplete = resolve);
+}
+
+async function loadCache() {
+const db = await getDB();
+const tx = db.transaction(STORE_NAME, 'readonly');
+const store = tx.objectStore(STORE_NAME);
+const request = store.getAll();
+return new Promise(resolve => {
+request.onsuccess = () => resolve(request.result);
+});
+}
+
+const filters = ['All', 'Today', 'Yesterday', 'Week', 'Month'];
+
+function setupFilters() {
+filterContainer.innerHTML = filters.map(f => `
+<button class="filter-btn px-4 py-1.5 rounded-full text-sm whitespace-nowrap ${f === currentFilter ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}" data-filter="${f}">
+${f}
+</button>
+`).join('');
 
 document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.onclick = (e) => {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    currentFilter = e.target.dataset.filter;
-    triggerSearch();
-  };
+btn.addEventListener('click', (e) => {
+currentFilter = e.target.dataset.filter;
+setupFilters();
+applyFilters();
+});
+});
+}
+
+searchInput.addEventListener('input', applyFilters);
+
+function applyFilters() {
+const term = searchInput.value.toLowerCase();
+const now = new Date();
+const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+const yesterday = today - 86400000;
+const week = today - 86400000 * 7;
+const month = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).getTime();
+
+filteredFiles = allFiles.filter(f => {
+if (term && !f.name.toLowerCase().includes(term)) return false;
+const t = new Date(f.modifiedTime).getTime();
+if (currentFilter === 'Today' && t < today) return false;
+if (currentFilter === 'Yesterday' && (t < yesterday || t >= today)) return false;
+if (currentFilter === 'Week' && t < week) return false;
+if (currentFilter === 'Month' && t < month) return false;
+return true;
 });
 
-function generateMockData() {
-  const data = new Array(500000);
-  const now = Date.now();
-  for(let i=0; i<500000; i++) {
-    data[i] = {
-      id: 'file_' + i,
-      name: 'invoice_2025_' + String(i).padStart(6, '0') + '.pdf',
-      modifiedTime: new Date(now - Math.random() * 31536000000).toISOString().split('T')[0]
-    };
-  }
-  return data;
+filteredFiles.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime));
+scrollContainer.scrollTop = 0;
+renderList();
 }
 
-function loadData(folderId, forceRefresh = false) {
-  const dbReq = indexedDB.open('InvoiceDB', 1);
-  dbReq.onupgradeneeded = e => {
-    e.target.result.createObjectStore('cache');
-  };
-  dbReq.onsuccess = e => {
-    const idb = e.target.result;
-    const tx = idb.transaction('cache', 'readonly');
-    const store = tx.objectStore('cache');
-    const getReq = store.get('all_invoices');
-    getReq.onsuccess = () => {
-      if (getReq.result && !forceRefresh) {
-        worker.postMessage({ type: 'init', items: getReq.result });
-        triggerSearch();
-      } else {
-        const data = generateMockData();
-        const tx2 = idb.transaction('cache', 'readwrite');
-        tx2.objectStore('cache').put(data, 'all_invoices');
-        worker.postMessage({ type: 'init', items: data });
-        triggerSearch();
-      }
-    };
-    getReq.onerror = () => {
-      const data = generateMockData();
-      worker.postMessage({ type: 'init', items: data });
-      triggerSearch();
-    };
-  };
+const itemHeight = 72;
+
+function renderList() {
+const scrollTop = scrollContainer.scrollTop;
+const viewportHeight = scrollContainer.clientHeight;
+const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 3);
+const endIndex = Math.min(filteredFiles.length, Math.ceil((scrollTop + viewportHeight) / itemHeight) + 3);
+
+scrollContent.style.height = `${filteredFiles.length * itemHeight}px`;
+scrollContent.innerHTML = '';
+
+for (let i = startIndex; i < endIndex; i++) {
+const file = filteredFiles[i];
+const div = document.createElement('div');
+div.className = 'absolute w-full flex items-center p-4 border-b border-gray-200 bg-white cursor-pointer active:bg-gray-50';
+div.style.top = `${i * itemHeight}px`;
+div.style.height = `${itemHeight}px`;
+
+const cb = document.createElement('input');
+cb.type = 'checkbox';
+cb.className = 'mr-4 w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500';
+cb.checked = selectedFiles.has(file.id);
+cb.onclick = (e) => {
+e.stopPropagation();
+cb.checked ? selectedFiles.add(file.id) : selectedFiles.delete(file.id);
+updateShareBtn();
+};
+
+const textDiv = document.createElement('div');
+textDiv.className = 'flex-1 min-w-0';
+textDiv.innerHTML = `
+<p class="text-sm font-medium text-gray-900 truncate">${file.name}</p>
+<p class="text-xs text-gray-500 truncate">${new Date(file.modifiedTime).toLocaleString()}</p>
+`;
+
+div.onclick = () => openPdf(file.id);
+div.append(cb, textDiv);
+scrollContent.appendChild(div);
 }
+}
+
+scrollContainer.addEventListener('scroll', renderList);
+
+function updateShareBtn() {
+if (selectedFiles.size > 0 && selectedFiles.size <= 3) {
+shareBtn.classList.remove('hidden');
+} else {
+shareBtn.classList.add('hidden');
+}
+}
+
+shareBtn.addEventListener('click', async () => {
+if (selectedFiles.size === 0 || selectedFiles.size > 3) return;
+
+const originalContent = shareBtn.innerHTML;
+shareBtn.innerHTML = '<span class="animate-pulse font-bold">...</span>';
+
+try {
+const filesToShare = [];
+for (const id of selectedFiles) {
+const fileMeta = allFiles.find(f => f.id === id);
+const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${firebaseConfig.apiKey}`);
+const blob = await res.blob();
+filesToShare.push(new File([blob], fileMeta.name, { type: 'application/pdf' }));
+}
+
+if (navigator.canShare && navigator.canShare({ files: filesToShare })) {
+await navigator.share({ files: filesToShare, title: 'Shared Invoices' });
+} else {
+alert('Sharing files is not supported on this browser.');
+}
+} catch (err) {
+alert('Error preparing files for share.');
+}
+
+shareBtn.innerHTML = originalContent;
+});
+
+let pdfDoc = null;
+let scale = 1.0;
+
+async function openPdf(fileId) {
+pdfModal.classList.remove('hidden');
+const ctx = pdfCanvas.getContext('2d');
+ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+
+try {
+const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${firebaseConfig.apiKey}`;
+pdfDoc = await pdfjsLib.getDocument(url).promise;
+scale = 1.0;
+renderPdf();
+} catch (err) {
+alert('Failed to load PDF');
+pdfModal.classList.add('hidden');
+}
+}
+
+async function renderPdf() {
+if (!pdfDoc) return;
+const page = await pdfDoc.getPage(1);
+const viewport = page.getViewport({ scale });
+pdfCanvas.height = viewport.height;
+pdfCanvas.width = viewport.width;
+await page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport }).promise;
+}
+
+zoomIn.addEventListener('click', () => {
+scale += 0.25;
+renderPdf();
+});
+
+zoomOut.addEventListener('click', () => {
+scale = Math.max(0.5, scale - 0.25);
+renderPdf();
+});
+
+closePdfBtn.addEventListener('click', () => {
+pdfModal.classList.add('hidden');
+pdfDoc = null;
+});
 </script>
 </body>
 </html>
